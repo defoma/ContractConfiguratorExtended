@@ -411,7 +411,7 @@ namespace ContractConfigurator.Parameters
                 // Register these early, otherwise we'll miss the event
                 if (resetChildrenWhenVesselDestroyed && Root.ContractState == Contract.State.Active)
                 {
-                    ContractVesselTracker.OnKeyedVesselDestroyed.Add(OnKeyedVesselDestroyed);
+                    SubscribeVesselDestroyedHandler();
                 }
 
                 // Create the parameter delegate for the vessel list
@@ -430,9 +430,21 @@ namespace ContractConfigurator.Parameters
             ContractVesselTracker.OnVesselAssociation.Add(OnVesselAssociation);
             ContractVesselTracker.OnVesselDisassociation.Add(OnVesselDisassociation);
 
+            // Remove before adding: OnUnregister leaves these subscribed for a completed group,
+            // and the OnKeyedVesselDestroyed reset path re-enables such a group, landing here again.
+            GameEvents.Contract.onCompleted.Remove(OnContractCompleted);
+            GameEvents.Contract.onFailed.Remove(OnContractFailed);
+            GameEvents.Contract.onCancelled.Remove(OnContractFailed);
             GameEvents.Contract.onCompleted.Add(OnContractCompleted);
             GameEvents.Contract.onFailed.Add(OnContractFailed);
             GameEvents.Contract.onCancelled.Add(OnContractFailed);
+
+            // Also subscribed in OnParameterLoad (a group that loads as disabled never gets OnRegister called).
+            // No contract state check here: during acceptance Register() runs before the contract state changes to Active.
+            if (resetChildrenWhenVesselDestroyed)
+            {
+                SubscribeVesselDestroyedHandler();
+            }
 
             // Add a waypoint for each possible vessel in the list
             foreach (string vesselKey in vesselList)
@@ -458,7 +470,17 @@ namespace ContractConfigurator.Parameters
                 GameEvents.Contract.onCancelled.Remove(OnContractFailed);
             }
 
-            ContractVesselTracker.OnKeyedVesselDestroyed.Remove(OnKeyedVesselDestroyed);
+            // Completing the group disables it (disableOnStateChange), which lands here via
+            // Unregister.  Keep listening in that case so the group can still be reset when the
+            // keyed vessel is destroyed before the contract's remaining parameters complete.
+            // The subscription still cannot outlive its scope: ContractSystem calls Unregister
+            // once more after the contract finishes (state no longer Active), and
+            // OnSceneLoadRequested cleans up on scene changes.
+            if (!resetChildrenWhenVesselDestroyed || state != ParameterState.Complete ||
+                Root == null || Root.ContractState != Contract.State.Active)
+            {
+                UnsubscribeVesselDestroyedHandler();
+            }
 
             foreach (VesselWaypoint vesselWaypoint in vesselWaypoints)
             {
@@ -555,6 +577,14 @@ namespace ContractConfigurator.Parameters
 
         protected void OnKeyedVesselDestroyed(GameEvents.HostTargetAction<Vessel, string> hta)
         {
+            // Never reset parameters on a contract that is no longer running (e.g. the keyed
+            // vessel dies in the same frame the contract completed).
+            if (Root == null || Root.ContractState != Contract.State.Active)
+            {
+                UnsubscribeVesselDestroyedHandler();
+                return;
+            }
+
             string vesselKey = hta.target;
             if (define == vesselKey || vesselList.Contains(vesselKey))
             {
@@ -730,6 +760,28 @@ namespace ContractConfigurator.Parameters
             }
 
             return true;
+        }
+
+        private void SubscribeVesselDestroyedHandler()
+        {
+            // Remove first: both OnParameterLoad and OnRegister call this and EventData.Add does not dedupe
+            UnsubscribeVesselDestroyedHandler();
+            ContractVesselTracker.OnKeyedVesselDestroyed.Add(OnKeyedVesselDestroyed);
+            GameEvents.onGameSceneLoadRequested.Add(OnSceneLoadRequested);
+        }
+
+        private void UnsubscribeVesselDestroyedHandler()
+        {
+            ContractVesselTracker.OnKeyedVesselDestroyed.Remove(OnKeyedVesselDestroyed);
+            GameEvents.onGameSceneLoadRequested.Remove(OnSceneLoadRequested);
+        }
+
+        private void OnSceneLoadRequested(GameScenes scene)
+        {
+            // The OnKeyedVesselDestroyed subscription deliberately survives Unregister of a
+            // completed group, but it must not survive the scene: this parameter instance is
+            // about to be abandoned, and the instance loaded in the next scene resubscribes.
+            UnsubscribeVesselDestroyedHandler();
         }
     }
 }
