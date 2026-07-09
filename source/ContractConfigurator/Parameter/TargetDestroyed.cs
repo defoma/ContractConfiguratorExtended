@@ -128,7 +128,7 @@ namespace ContractConfigurator.Parameters
         {
             base.OnUnregister();
             GameEvents.onVesselWillDestroy.Remove(OnVesselWillDestroy);
-            GameEvents.onVesselWasModified.Add(OnVesselWasModified);
+            GameEvents.onVesselWasModified.Remove(OnVesselWasModified);
 
             foreach (VesselWaypoint vesselWaypoint in vesselWaypoints)
             {
