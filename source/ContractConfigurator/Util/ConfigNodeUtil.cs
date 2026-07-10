@@ -79,20 +79,29 @@ namespace ContractConfigurator
         
         static ConfigNodeUtil()
         {
-            // Initialize the hardcoded mappings in the type map
-            typeMap["bool"] = typeof(bool);
-            typeMap["byte"] = typeof(byte);
-            typeMap["sbyte"] = typeof(sbyte);
-            typeMap["char"] = typeof(char);
-            typeMap["short"] = typeof(short);
-            typeMap["int"] = typeof(int);
-            typeMap["long"] = typeof(long);
-            typeMap["ushort"] = typeof(ushort);
-            typeMap["uint"] = typeof(uint);
-            typeMap["ulong"] = typeof(ulong);
-            typeMap["float"] = typeof(float);
-            typeMap["double"] = typeof(double);
-            typeMap["string"] = typeof(string);
+            // Initialize the hardcoded mappings in the type map. Include both the C# alias and the
+            // .NET type name for each, since config files use both interchangeably (e.g. "int" and
+            // "Int32"). AssemblyLoader.loadedAssemblies only covers plugin DLLs from GameData, so
+            // types from mscorlib won't be found by the reflection fallback below - they need to be
+            // seeded here explicitly.
+            typeMap["bool"] = typeMap["Boolean"] = typeof(bool);
+            typeMap["byte"] = typeMap["Byte"] = typeof(byte);
+            typeMap["sbyte"] = typeMap["SByte"] = typeof(sbyte);
+            typeMap["char"] = typeMap["Char"] = typeof(char);
+            typeMap["short"] = typeMap["Int16"] = typeof(short);
+            typeMap["int"] = typeMap["Int32"] = typeof(int);
+            typeMap["long"] = typeMap["Int64"] = typeof(long);
+            typeMap["ushort"] = typeMap["UInt16"] = typeof(ushort);
+            typeMap["uint"] = typeMap["UInt32"] = typeof(uint);
+            typeMap["ulong"] = typeMap["UInt64"] = typeof(ulong);
+            typeMap["float"] = typeMap["Single"] = typeof(float);
+            typeMap["double"] = typeMap["Double"] = typeof(double);
+            typeMap["string"] = typeMap["String"] = typeof(string);
+            typeMap["decimal"] = typeMap["Decimal"] = typeof(decimal);
+            typeMap["object"] = typeMap["Object"] = typeof(object);
+            typeMap["DateTime"] = typeof(DateTime);
+            typeMap["TimeSpan"] = typeof(TimeSpan);
+            typeMap["Guid"] = typeof(Guid);
         }
 
         /// <summary>
@@ -1051,6 +1060,20 @@ namespace ContractConfigurator
                         t.Assembly.FullName.Contains("Assembly-CSharp") ? 1 : 2)
                     .ThenBy(t => t.FullName.Length)
                     .FirstOrDefault();
+
+                // AssemblyLoader.loadedAssemblies only covers plugin DLLs from GameData, not core
+                // BCL assemblies (mscorlib, System, ...). The common BCL type names are seeded into
+                // typeMap above; this is just a rarely-hit safety net for anything not seeded there.
+                if (type == null)
+                {
+                    type = Type.GetType("System." + name);
+                    if (type != null)
+                    {
+                        LoggingUtil.LogWarning(typeof(ConfigNodeUtil), "Type '{0}' was resolved via System namespace fallback - " +
+                            "consider adding it to the typeMap seed list in ConfigNodeUtil's static constructor.", name);
+                    }
+                }
+
                 if (type != null)
                 {
                     // Cache it
