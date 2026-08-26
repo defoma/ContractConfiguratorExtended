@@ -380,7 +380,7 @@ namespace ContractConfigurator.Parameters
             CelestialBody homeBody = FlightGlobals.GetHomeBody();
             Vector3d surfaceNVector = homeBody.GetSurfaceNVector(SpaceCenter.Instance.Latitude, SpaceCenter.Instance.Longitude);
             Vector3d surfaceNVector2 = homeBody.GetSurfaceNVector(FlightGlobals.ActiveVessel.latitude, FlightGlobals.ActiveVessel.longitude);
-            double num = homeBody.Radius * Vector3d.Angle(surfaceNVector, surfaceNVector2) * 0.017453292519943295;
+            double num = homeBody.Radius * Vector3d.Angle(surfaceNVector, surfaceNVector2) * Math.PI / 180;
             return num >= this.minDownrange && num <= this.maxDownrange;
         }
 
