@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Security.Policy;
 using System.Text;
 using Contracts;
 using Contracts.Parameters;
+using HarmonyLib;
 using KSP;
 using KSP.Localization;
 using UnityEngine;
@@ -377,11 +378,10 @@ namespace ContractConfigurator.Parameters
 
         private bool CheckDownrange(Vessel vessel)
         {
-            CelestialBody homeBody = FlightGlobals.GetHomeBody();
-            Vector3d surfaceNVector = homeBody.GetSurfaceNVector(SpaceCenter.Instance.Latitude, SpaceCenter.Instance.Longitude);
-            Vector3d surfaceNVector2 = homeBody.GetSurfaceNVector(FlightGlobals.ActiveVessel.latitude, FlightGlobals.ActiveVessel.longitude);
-            double num = homeBody.Radius * Vector3d.Angle(surfaceNVector, surfaceNVector2) * Math.PI / 180;
-            return num >= this.minDownrange && num <= this.maxDownrange;
+            FlightLogger activeLogger = GameObject.FindObjectOfType<FlightLogger>();
+            FieldInfo groundDistanceField = typeof(FlightLogger).GetField("groundDistance", BindingFlags.NonPublic | BindingFlags.Instance);
+            double currentDownrange = (double)groundDistanceField.GetValue(activeLogger);
+            return currentDownrange >= this.minDownrange && currentDownrange <= this.maxDownrange;
         }
 
         private bool CheckVesselRateOfClimb(Vessel vessel)
